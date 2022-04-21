@@ -1,3 +1,5 @@
-module StackSync
+module Stack-Migration
 
-go 1.18
+go 1.17
+
+require github.com/cli/safeexec v1.0.0
