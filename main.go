@@ -72,39 +72,10 @@ func main() {
 		isPatchFileDownloaded := savePatchFile(patchFileUrls, tagSelectedByUser)
 
 		if isPatchFileDownloaded {
-			applyPatchFile(tagSelectedByUser, len(patchFileUrls))
+
 		}
 	}
 
 }
 
-func applyPatchFile(tag string, indices int) {
-	branchName := "patch-apply"
-	err := CheckoutBranch(branchName)
-	if err != nil {
-		panic("Checkout " + err.Error())
-	}
-	var patchFileNames []string
-	for i := 0; i < indices; i++ {
-		name := fmt.Sprintf("%s-%d.patch", tag, i)
-		patchFileNames = append(patchFileNames, name)
-	}
-	for _, name := range patchFileNames {
-		patchErr := ApplyPatch(name)
-		if patchErr != nil {
-			panic("Patch " + patchErr.Error())
-			return
-		}
-	}
-	fmt.Println("All the patch files applied successfully.")
-	isCacheCleared := DeleteCache(patchFileNames)
-	if isCacheCleared {
-		pushErr := pushTheBranch(branchName)
-		if pushErr != nil {
-			log.Fatalln("Error while pushing ", pushErr)
-		}
-		fmt.Println("Successfully pushed the branch to remote")
-		raiseAPullRequest()
-	}
 
-}
