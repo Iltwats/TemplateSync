@@ -51,29 +51,7 @@ func main() {
 	message := fmt.Sprintf("Upgrading this repository from version %s to version %s", userRepoConsumedTag, tagSelectedByUser)
 	fmt.Println(message)
 	if isUserRepoStackConsumed {
-		commitsUrl := fmt.Sprintf(APIEndpoint+"%s/%s/commits/%s", username, repoName, tagSelectedByUser)
-		commitsResp, comErr := getCommits(commitsUrl)
-		fmt.Println("Fetching all the commits for each tags...")
-		if comErr != nil {
-			panic(comErr)
-		}
-		parents := commitsResp.Parent
-		var parentUrls []string
-		for _, parent := range parents {
-			parentUrls = append(parentUrls, parent.HtmlUrl)
-		}
 
-		var patchFileUrls []string
-		patchFileUrls = append(patchFileUrls, commitsResp.Url)
-		for _, url := range parentUrls {
-			patchFileUrls = append(patchFileUrls, url)
-		}
-
-		isPatchFileDownloaded := savePatchFile(patchFileUrls, tagSelectedByUser)
-
-		if isPatchFileDownloaded {
-
-		}
 	}
 
 }
