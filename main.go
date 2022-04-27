@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -75,27 +76,48 @@ func main() {
 	if isUserRepoStackConsumed {
 		var fileUrl = fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/main/.github/workflows/%s", username, repoName, fileName)
 		if downloadTheWorkflowFile(fileName, fileUrl) {
-			MoveFile(fileName)
-			doGitOperations(fileName)
-			err := RunWorkflow(fileName)
-			if err != nil {
-				log.Fatalln(err)
-			}
-			fileUrl := fmt.Sprintf("https://api.github.com/repos/%s/%s/actions/workflows/%s/runs", username, repoName, fileName)
-			opt, er := createWorkflowRun(fileUrl)
-			if er != nil {
-				log.Fatalln(er)
-			}
-			fmt.Println(opt)
+			//MoveFile(fileName)
+			//doGitOperationsForWorkflowFile(fileName)
+			//errB := CheckoutBranch(fileName)
+			//if errB != nil {
+			//	log.Fatalln(errB)
+			//}
+			//errP := pushTheBranch(fileName)
+			//if errP != nil {
+			//	log.Fatalln(errP)
+			//}
+			//err := RunWorkflow(fileName)
+			//if err != nil {
+			//	log.Fatalln(err)
+			//}
+			pathName := getNames()
+			fileUrl := fmt.Sprintf("https://api.github.com/repos%s/actions/workflows/%s/runs", pathName, fileName)
+			fmt.Println(fileUrl)
+			workflowStatsCheck(fileUrl)
 		}
 	}
 }
 
-func doGitOperations(fileName string) {
-	err := CheckoutBranch(fileName)
-	if err != nil {
-		log.Fatalln(err)
+func workflowStatsCheck(url string) {
+	opt, er := getWorkflowRunStats(url)
+	if er != nil {
+		log.Fatalln(er)
 	}
+	status := opt.WorkflowsRuns[0].Status
+	fmt.Printf("Waiting for workflow run to be completed, current status -> %s\n", status)
+
+	//time.AfterFunc(59*time.Second, workflowStatsCheck(url))
+}
+
+func loopCase() {
+	for {
+		workflowStatsCheck(url)
+		if status != "completed" {
+			break
+		}
+	}
+}
+func doGitOperationsForWorkflowFile(fileName string) {
 	err1 := AddFile(fileName)
 	if err1 != nil {
 		log.Fatalln(err1)
@@ -104,16 +126,44 @@ func doGitOperations(fileName string) {
 	if err2 != nil {
 		log.Fatalln(err2)
 	}
-	err3 := pushTheBranch(fileName)
+	err3 := pushCode()
 	if err3 != nil {
 		log.Fatalln(err3)
 	}
 }
 
+// Get user/repo name of current repo
+func getNames() string {
+	cmd, err := GitCommand("config", "--get", "remote.origin.url")
+	if err != nil {
+		fmt.Println("Error while getting repo config", err)
+	}
+	out, errO := PrepareCmd(cmd).Output()
+	if errO != nil {
+		log.Fatalln(errO)
+	}
+	var origin = string(out)
+	newOri := strings.Trim(origin, ".git\n")
+	u, epr := url.Parse(newOri)
+	if epr != nil {
+		log.Fatal(epr)
+	}
+	return u.Path
+}
+
 // Method to push the current local branch to remote
 func pushTheBranch(name string) error {
+	branch := strings.ReplaceAll(name, ".yml", "")
 	fmt.Println("Pushing the branch to remote..")
-	pushCmd, err := GitCommand("push", "--set-upstream", "origin", name)
+	pushCmd, err := GitCommand("push", "--set-upstream", "origin", branch)
+	if err != nil {
+		return err
+	}
+	return PrepareCmd(pushCmd).Run()
+}
+
+func pushCode() error {
+	pushCmd, err := GitCommand("push")
 	if err != nil {
 		return err
 	}
@@ -300,7 +350,7 @@ func downloadTheWorkflowFile(filename string, fileUrl string) bool {
 }
 
 // Invoke workflow run
-func createWorkflowRun(fileUrl string) (Workflows, error) {
+func getWorkflowRunStats(fileUrl string) (Workflows, error) {
 	resp, err := http.Get(fileUrl)
 	if err != nil {
 		log.Fatalln(err)
