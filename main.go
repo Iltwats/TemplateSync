@@ -76,47 +76,71 @@ func main() {
 	if isUserRepoStackConsumed {
 		var fileUrl = fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/main/.github/workflows/%s", username, repoName, fileName)
 		if downloadTheWorkflowFile(fileName, fileUrl) {
-			//MoveFile(fileName)
-			//doGitOperationsForWorkflowFile(fileName)
-			//errB := CheckoutBranch(fileName)
-			//if errB != nil {
-			//	log.Fatalln(errB)
-			//}
-			//errP := pushTheBranch(fileName)
-			//if errP != nil {
-			//	log.Fatalln(errP)
-			//}
-			//err := RunWorkflow(fileName)
-			//if err != nil {
-			//	log.Fatalln(err)
-			//}
+			MoveFile(fileName)
+			doGitOperationsForWorkflowFile(fileName)
+			errB := CheckoutBranch(fileName)
+			if errB != nil {
+				log.Fatalln(errB)
+			}
+			errP := pushTheBranch(fileName)
+			if errP != nil {
+				log.Fatalln(errP)
+			}
+			err := RunWorkflow(fileName)
+			if err != nil {
+				log.Fatalln(err)
+			}
 			pathName := getNames()
 			fileUrl := fmt.Sprintf("https://api.github.com/repos%s/actions/workflows/%s/runs", pathName, fileName)
-			fmt.Println(fileUrl)
-			workflowStatsCheck(fileUrl)
+			if workflowStatsCheck(fileUrl) {
+				nextSteps(fileName)
+			}
+
 		}
 	}
 }
 
-func workflowStatsCheck(url string) {
+func nextSteps(name string) {
+	err := updateBranch()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	raiseAPullRequest()
+
+}
+
+func workflowStatsCheck(url string) bool {
+	fmt.Println(url)
 	opt, er := getWorkflowRunStats(url)
 	if er != nil {
 		log.Fatalln(er)
 	}
 	status := opt.WorkflowsRuns[0].Status
-	fmt.Printf("Waiting for workflow run to be completed, current status -> %s\n", status)
-
-	//time.AfterFunc(59*time.Second, workflowStatsCheck(url))
-}
-
-func loopCase() {
+	fmt.Printf("Waiting for workflow run to be completed\nCurrent status -> %s\n", status)
+	isWorkflowComplete := false
+	// Timeout of 3 minutes
+	timeout := time.After(180 * time.Second)
+	ticker := time.Tick(45 * time.Second)
 	for {
-		workflowStatsCheck(url)
-		if status != "completed" {
+		select {
+		case <-timeout:
+			fmt.Println("Timed Out")
 			break
+		case <-ticker:
+			ok, err := getWorkflowRunStats(url)
+			if err != nil {
+				log.Fatalln(err)
+			} else if ok.WorkflowsRuns[0].Status != "completed" {
+				fmt.Printf("Current status -> %s\n", status)
+			} else if ok.WorkflowsRuns[0].Status == "completed" {
+				isWorkflowComplete = true
+				break
+			}
 		}
 	}
+	return isWorkflowComplete
 }
+
 func doGitOperationsForWorkflowFile(fileName string) {
 	err1 := AddFile(fileName)
 	if err1 != nil {
@@ -170,6 +194,14 @@ func pushCode() error {
 	return PrepareCmd(pushCmd).Run()
 }
 
+func updateBranch() error {
+	pushCmd, err := GitCommand("pull")
+	if err != nil {
+		return err
+	}
+	return PrepareCmd(pushCmd).Run()
+}
+
 // CheckoutBranch Checkout Branch from master
 func CheckoutBranch(filename string) error {
 	branch := strings.ReplaceAll(filename, ".yml", "")
@@ -213,6 +245,18 @@ func RunWorkflow(fileName string) error {
 	}
 	fmt.Println(string(cmd))
 	return err
+}
+
+// Method to raise a pull request
+func raiseAPullRequest() {
+	fmt.Println("Creating a pull request...")
+	prTitle := "Migration-patch"
+	prBody := "PR to migrate to latest stack version"
+	cmd, err := exec.Command("gh", "pr", "create", "--title", prTitle, "--body", prBody).Output()
+	if err != nil {
+		fmt.Println("Error while creating a PR", err)
+	}
+	fmt.Println("To complete the merge, merge this PR by going to the following link: ", string(cmd))
 }
 
 // Fetch all the release tags available for stack repository
