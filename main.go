@@ -65,12 +65,19 @@ func main() {
 	for _, val := range releaseData {
 		tags = append(tags, val.TagName)
 	}
-	tagSelectedByUser := tags[0]
-	userRepoConsumedTag := tags[1]  // TODO fetch from API
+	stackI := tags[0]
+	tagSelectedByUser := tags[1]
+	userRepoConsumedTag := tags[2]  // TODO fetch from API
 	isUserRepoStackConsumed := true // TODO fetch from API
+
 	fmt.Printf("Current version of the repository: %s\n", userRepoConsumedTag)
-	message := fmt.Sprintf("Upgrading this repository from version %s to version %s", userRepoConsumedTag, tagSelectedByUser)
+	message := fmt.Sprintf("Upgrading this repository from version %s to version %s", userRepoConsumedTag, stackI)
 	fmt.Println(message)
+	fmt.Println("\nParsing stack.yml")
+	fmt.Println("? Enter your Token")
+	var token string
+	fmt.Scanln(&token)
+	saveToken(token)
 	var usesFile = "stack-init"
 	var fileName = fmt.Sprintf("%s@%s.yml", usesFile, tagSelectedByUser)
 	if isUserRepoStackConsumed {
@@ -92,52 +99,72 @@ func main() {
 			}
 			pathName := getNames()
 			fileUrl := fmt.Sprintf("https://api.github.com/repos%s/actions/workflows/%s/runs", pathName, fileName)
-			if workflowStatsCheck(fileUrl) {
-				nextSteps(fileName)
+			for range time.Tick(time.Second * 130) {
+				workflowStatsCheck(fileUrl, fileName)
 			}
+
+			//} else {
+			//	fmt.Println("Workflow run failed")
+			//}
 
 		}
 	}
 }
 
-func nextSteps(name string) {
+func saveToken(token string) {
+	fmt.Println("Saving secrets")
+	cmd, err := exec.Command("gh", "secret", "set", "GIT_TOKEN", "-b", token).Output()
+	if err != nil {
+		fmt.Println("Error while adding repo secrets", err)
+	}
+	fmt.Println("Secrets added successfully ", string(cmd))
+}
+
+func nextSteps() {
 	err := updateBranch()
 	if err != nil {
 		log.Fatalln(err)
 	}
 	raiseAPullRequest()
-
 }
 
-func workflowStatsCheck(url string) bool {
-	fmt.Println(url)
-	opt, er := getWorkflowRunStats(url)
-	if er != nil {
-		log.Fatalln(er)
+func workflowStatsCheck(url string, name string) bool {
+	ok, err := getWorkflowRunStats(url)
+	if err != nil {
+		log.Fatalln(err)
 	}
-	status := opt.WorkflowsRuns[0].Status
-	fmt.Printf("Waiting for workflow run to be completed\nCurrent status -> %s\n", status)
+	status := ok.WorkflowsRuns[0].Status
+	fmt.Printf("Workflow run completed\nCurrent status -> %s\n", status)
 	isWorkflowComplete := false
-	// Timeout of 3 minutes
-	timeout := time.After(180 * time.Second)
-	ticker := time.Tick(45 * time.Second)
-	for {
-		select {
-		case <-timeout:
-			fmt.Println("Timed Out")
-			break
-		case <-ticker:
-			ok, err := getWorkflowRunStats(url)
-			if err != nil {
-				log.Fatalln(err)
-			} else if ok.WorkflowsRuns[0].Status != "completed" {
-				fmt.Printf("Current status -> %s\n", status)
-			} else if ok.WorkflowsRuns[0].Status == "completed" {
-				isWorkflowComplete = true
-				break
+	curr := time.Now()
+	ticker := time.NewTicker(20 * time.Second)
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				val := <-ticker.C
+				diff := val.Sub(curr)
+				out := time.Time{}.Add(diff).Format("04:05")
+				ok, err := getWorkflowRunStats(url)
+				if err != nil {
+					log.Fatalln(err)
+				}
+				status := ok.WorkflowsRuns[0].Status
+				conclusion := ok.WorkflowsRuns[0].Conclusion
+				if status != "completed" {
+					fmt.Printf("Current status -> %s,\ttime elapsed %ssec\n", status, out)
+				} else if status == "completed" && conclusion == "success" {
+					isWorkflowComplete = true
+					ticker.Stop()
+					return
+				} else {
+					ticker.Stop()
+					return
+				}
 			}
 		}
-	}
+	}()
+	nextSteps()
 	return isWorkflowComplete
 }
 
@@ -154,6 +181,7 @@ func doGitOperationsForWorkflowFile(fileName string) {
 	if err3 != nil {
 		log.Fatalln(err3)
 	}
+	fmt.Println("Performing Git Operations")
 }
 
 // Get user/repo name of current repo
@@ -212,6 +240,7 @@ func CheckoutBranch(filename string) error {
 	return PrepareCmd(configCmd).Run()
 }
 func MoveFile(fileName string) {
+	fmt.Println("Moving files")
 	filePath := fmt.Sprintf(".github/workflows/%s", fileName)
 	cmd, err := exec.Command("mv", fileName, filePath).Output()
 	if err != nil {
@@ -238,6 +267,7 @@ func CommitFile(fileName string) error {
 }
 
 func RunWorkflow(fileName string) error {
+	fmt.Println("Triggering the Workflow file")
 	branch := strings.ReplaceAll(fileName, ".yml", "")
 	cmd, err := exec.Command("gh", "workflow", "run", fileName, "--ref", branch).Output()
 	if err != nil {
@@ -257,6 +287,7 @@ func raiseAPullRequest() {
 		fmt.Println("Error while creating a PR", err)
 	}
 	fmt.Println("To complete the merge, merge this PR by going to the following link: ", string(cmd))
+
 }
 
 // Fetch all the release tags available for stack repository
@@ -397,7 +428,7 @@ func downloadTheWorkflowFile(filename string, fileUrl string) bool {
 func getWorkflowRunStats(fileUrl string) (Workflows, error) {
 	resp, err := http.Get(fileUrl)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalln("run", err)
 	}
 	var workflow Workflows
 	parseError := json.NewDecoder(resp.Body).Decode(&workflow)
