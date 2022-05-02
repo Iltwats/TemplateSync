@@ -56,7 +56,7 @@ func main() {
 	repoName := "react-template"
 	releaseURL := fmt.Sprintf(APIEndpoint+"%s/%s/releases", username, repoName)
 	releaseData, err := getReleases(releaseURL)
-	fmt.Println("Fetching all the release tags...")
+	fmt.Println("Fetching the latest release version..")
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -74,6 +74,7 @@ func main() {
 	message := fmt.Sprintf("Upgrading this repository from version %s to version %s", userRepoConsumedTag, stackI)
 	fmt.Println(message)
 	fmt.Println("\nParsing stack.yml")
+	fmt.Println("Taking new inputs...")
 	fmt.Println("? Enter your Token")
 	var token string
 	fmt.Scanln(&token)
@@ -181,7 +182,6 @@ func doGitOperationsForWorkflowFile(fileName string) {
 	if err3 != nil {
 		log.Fatalln(err3)
 	}
-	fmt.Println("Performing Git Operations")
 }
 
 // Get user/repo name of current repo
@@ -240,13 +240,11 @@ func CheckoutBranch(filename string) error {
 	return PrepareCmd(configCmd).Run()
 }
 func MoveFile(fileName string) {
-	fmt.Println("Moving files")
 	filePath := fmt.Sprintf(".github/workflows/%s", fileName)
-	cmd, err := exec.Command("mv", fileName, filePath).Output()
+	_, err := exec.Command("mv", fileName, filePath).Output()
 	if err != nil {
 		fmt.Println("Error while creating a PR", err)
 	}
-	fmt.Println(string(cmd))
 }
 
 func AddFile(fileName string) error {
