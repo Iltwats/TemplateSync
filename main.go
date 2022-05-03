@@ -113,12 +113,11 @@ func main() {
 }
 
 func saveToken(token string) {
-	fmt.Println("Saving secrets")
 	cmd, err := exec.Command("gh", "secret", "set", "GIT_TOKEN", "-b", token).Output()
 	if err != nil {
 		fmt.Println("Error while adding repo secrets", err)
 	}
-	fmt.Println("Secrets added successfully ", string(cmd))
+	fmt.Println("Secrets added successfully to the origin.", string(cmd))
 }
 
 func nextSteps() {
@@ -135,38 +134,38 @@ func workflowStatsCheck(url string, name string) bool {
 		log.Fatalln(err)
 	}
 	status := ok.WorkflowsRuns[0].Status
-	fmt.Printf("Workflow run completed\nCurrent status -> %s\n", status)
-	isWorkflowComplete := false
-	curr := time.Now()
-	ticker := time.NewTicker(20 * time.Second)
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				val := <-ticker.C
-				diff := val.Sub(curr)
-				out := time.Time{}.Add(diff).Format("04:05")
-				ok, err := getWorkflowRunStats(url)
-				if err != nil {
-					log.Fatalln(err)
-				}
-				status := ok.WorkflowsRuns[0].Status
-				conclusion := ok.WorkflowsRuns[0].Conclusion
-				if status != "completed" {
-					fmt.Printf("Current status -> %s,\ttime elapsed %ssec\n", status, out)
-				} else if status == "completed" && conclusion == "success" {
-					isWorkflowComplete = true
-					ticker.Stop()
-					return
-				} else {
-					ticker.Stop()
-					return
-				}
-			}
-		}
-	}()
+	fmt.Printf("Workflow file Triggered. Fetching Statuses: \nCurrent status -> %s\n", status)
+	//isWorkflowComplete := false
+	//curr := time.Now()
+	//ticker := time.NewTicker(20 * time.Second)
+	//go func() {
+	//	for {
+	//		select {
+	//		case <-ticker.C:
+	//			val := <-ticker.C
+	//			diff := val.Sub(curr)
+	//			out := time.Time{}.Add(diff).Format("04:05")
+	//			ok, err := getWorkflowRunStats(url)
+	//			if err != nil {
+	//				log.Fatalln(err)
+	//			}
+	//			status := ok.WorkflowsRuns[0].Status
+	//			conclusion := ok.WorkflowsRuns[0].Conclusion
+	//			if status != "completed" {
+	//				fmt.Printf("Current status -> %s,\ttime elapsed %ssec\n", status, out)
+	//			} else if status == "completed" && conclusion == "success" {
+	//				isWorkflowComplete = true
+	//				ticker.Stop()
+	//				return
+	//			} else {
+	//				ticker.Stop()
+	//				return
+	//			}
+	//		}
+	//	}
+	//}()
 	nextSteps()
-	return isWorkflowComplete
+	return true
 }
 
 func doGitOperationsForWorkflowFile(fileName string) {
@@ -265,7 +264,7 @@ func CommitFile(fileName string) error {
 }
 
 func RunWorkflow(fileName string) error {
-	fmt.Println("Triggering the Workflow file")
+	fmt.Println("Triggering the Action Workflow file...")
 	branch := strings.ReplaceAll(fileName, ".yml", "")
 	cmd, err := exec.Command("gh", "workflow", "run", fileName, "--ref", branch).Output()
 	if err != nil {
@@ -404,7 +403,6 @@ func printArgs(w io.Writer, args []string) error {
 
 // Method to download and save patch file
 func downloadTheWorkflowFile(filename string, fileUrl string) bool {
-	fmt.Println("Downloading Workflow files...")
 	var fileLen = 0
 	out, _ := os.Create(filename)
 	// timeout if it takes more than 10 secs
@@ -417,8 +415,6 @@ func downloadTheWorkflowFile(filename string, fileUrl string) bool {
 	fileLen++
 	resp.Body.Close()
 	out.Close()
-
-	fmt.Println("Download complete for workflow files.")
 	return fileLen == 1
 }
 
