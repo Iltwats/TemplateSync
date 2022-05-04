@@ -100,7 +100,7 @@ func main() {
 			}
 			pathName := getNames()
 			fileUrl := fmt.Sprintf("https://api.github.com/repos%s/actions/workflows/%s/runs", pathName, fileName)
-			for range time.Tick(time.Second * 130) {
+			for range time.Tick(time.Second * 110) {
 				workflowStatsCheck(fileUrl, fileName)
 			}
 
@@ -117,7 +117,7 @@ func saveToken(token string) {
 	if err != nil {
 		fmt.Println("Error while adding repo secrets", err)
 	}
-	fmt.Println("Secrets added successfully to the origin.", string(cmd))
+	fmt.Println("\nSecrets added successfully to the origin.", string(cmd))
 }
 
 func nextSteps() {
@@ -205,7 +205,7 @@ func getNames() string {
 // Method to push the current local branch to remote
 func pushTheBranch(name string) error {
 	branch := strings.ReplaceAll(name, ".yml", "")
-	fmt.Println("Pushing the branch to remote..")
+	fmt.Println("Pushing the branch to remote...\n")
 	pushCmd, err := GitCommand("push", "--set-upstream", "origin", branch)
 	if err != nil {
 		return err
